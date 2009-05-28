@@ -15,17 +15,25 @@ Decoder = {} -- class
 Palette = {} -- class
 -- Palette end
 
-ImageObject = {} -- class
-function ImageObject:renderToBMP(imageBMP)
-end
--- ImageObject end
+VectorImage = {} -- class
+-- VectorObject end
 
-Image = {} -- class
-function Image:renderToBMP()
-    
+PPMImage = {} -- class
+function PPMImage:new(o, image)
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+
+    -- Init data from PPM image file 
+    if type(image) == "string" then
+    -- Init data 
+    elseif type(image) == "table" then
+    end
+    return o
 end
 
--- Image end
+-- PPMImage end
+
 
 GeneticManager = {} -- class
 -- GeneticManager end
@@ -36,12 +44,21 @@ function main(operation, inputFile, outputFile)
     end
 
     if operation == "encode" then
+        encoder = Encoder:new()
+        inputImage = PPMImage:new(inputFile)
+        outputImage = encoder:encode(inputImage)
+        outputImage.writeTwit(outputFile)
         return
     elseif operation == "decode" then
+        decoder = Decoder:new()
+        inputImage = decoder.readTwit(inputFile)
+        outputImage = PPMImage:new(inputImage)
+        outputImage.write(outputFile)
         return
     end
 
     error("Unknown operation")
+end
 main(...)
 
 -- vim: ts=4:expandtab
