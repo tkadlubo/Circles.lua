@@ -1,5 +1,10 @@
 #!/usr/bin/env lua
 
+
+Decoder = {} -- class {{{
+-- Decoder end }}}
+
+
 Encoder = {} -- class {{{
 function Encoder:new(o)
     o = o or {}
@@ -9,44 +14,43 @@ function Encoder:new(o)
 end
 -- Encoder end }}}
 
-Decoder = {} -- class {{{
--- Decoder end }}}
+
+GeneticManager = {} -- class {{{
+-- GeneticManager end }}}
+
 
 Palette = {} -- class {{{
 -- Palette end }}}
 
-VectorImage = {} -- class {{{
--- VectorObject end }}}
 
 PPMImage = {} -- class {{{
-function PPMImage:new(o, image)
+function PPMImage:new(o, image) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
 
-    -- Init data from PPM image file 
     if type(image) == "string" then
-    -- Init data by rendering a VectorImage
-    o:readPPMFile(image)
+        o:readPPMFile(image)
     elseif type(image) == "table" then
+        o:renderVectorImage(image)
     end
     return o
-end
+end --}}}
 
-function PPMImage:readPPMFile(fileName)
+function PPMImage:readPPMFile(fileName) --{{{
     local file = io.open(fileName, "r")
     assert(file ~= nil)
 
     self.parserState = "start"
 
-    local parserStateMachine = {
-        start = function(self, line)
+    local parserStateMachine = { --{{{
+        start = function(self, line) --{{{
             if line ~= "P3" then
                 error("PPM syntax error in line "..self.line_counter..": only P3 format supported")
             end
             self.parserState = "aspectRatio"
-        end,
-        aspectRatio = function(self, line)
+        end, --}}}
+        aspectRatio = function(self, line) --{{{
             local width, height = line:match("(%d+)%s+(%d+)")
             if width ~= nil and height ~=nil then
                 self.width = tonumber(width)
@@ -55,8 +59,8 @@ function PPMImage:readPPMFile(fileName)
                 error("PPM syntax error in line "..self.line_counter..": invalid image size")
             end
             self.parserState = "colorDepth"
-        end,
-        colorDepth = function(self, line)
+        end, --}}}
+        colorDepth = function(self, line) --{{{
             if line ~= "255" then
                 error("PPM syntax error in line "..self.line_counter..": only 24bit images are supported")
             end
@@ -64,32 +68,34 @@ function PPMImage:readPPMFile(fileName)
             self.x = 1
             self.y = 1
             self.data = {{}}
-        end,
-        pixelData = function(self, line)
-            local R, G, B = line:match("(%d+)%s+(%d+)%s+(%d+)")
-            if R == nil or G == nil or B == nil then
-                error("PPM syntax error in line "..self.line_counter..": invalid pixel data: "..line)
-            end
+        end, --}}}
+        pixelData = function(self, line) --{{{
+            for pixel in line:gmatch("%d+%s+%d+%s+%d+%s*") do
+                local R, G, B = pixel:match("(%d+)%s+(%d+)%s+(%d+)")
+                if R == nil or G == nil or B == nil then
+                    error("PPM syntax error in line "..self.line_counter..": invalid pixel data: "..line)
+                end
 
-            table.insert(self.data[self.y], {R=tonumber(R), G=tonumber(G), B=tonumber(B)})
+                table.insert(self.data[self.y], {R=tonumber(R), G=tonumber(G), B=tonumber(B)})
 
-            self.x = self.x + 1
-            if self.x > self.width then
-                self.x = 1
-                self.y = self.y + 1
-                table.insert(self.data, {})
-            end
+                self.x = self.x + 1
+                if self.x > self.width then
+                    self.x = 1
+                    self.y = self.y + 1
+                    table.insert(self.data, {})
+                end
             
-            if self.y == self.height + 1 then
-                self.parserState = "eof"
+                if self.y == self.height + 1 then
+                    self.parserState = "eof"
+                end
             end
-        end,
-        eof = function(self, line)
+        end, --}}}
+        eof = function(self, line) --{{{
             if line ~= nil then
                 error("PPM syntax error in line "..self.line_counter..": EOF expected")
             end
-        end
-    }
+        end --}}}
+    } --}}}
     self.line_counter = 0
     for line in file:lines() do
         self.line_counter = self.line_counter + 1
@@ -102,47 +108,46 @@ function PPMImage:readPPMFile(fileName)
     end
 
     file:close()
-end
+end --}}}
 
-function PPMImage:pixelAt(x, y)
+function PPMImage:pixelAt(x, y) --{{{
     return self.data[x][y]
-end
+end --}}}
 
-function PPMImage:aspectRatio()
+function PPMImage:aspectRatio() --{{{
     return {self.width, self.height}
-end
+end --}}}
 -- PPMImage end }}}
-
 PPMImageTest = {} -- class {{{
 function PPMImageTest:setUp()
     self.testedImage = PPMImage:new({}, "test.ppm")
 end
 
-function PPMImageTest:testConstructor()
+function PPMImageTest:testConstructor() --{{{
     assertEquals(type(self.testedImage), "table")
-end
+end --}}}
 
-function PPMImageTest:testFileData()
+function PPMImageTest:testFileData() --{{{
     local pixel22 = self.testedImage:pixelAt(2, 2)
     assertEquals(type(pixel22), "table")
     assertEquals(pixel22.R, 255)
     assertEquals(pixel22.G, 255)
     assertEquals(pixel22.B, 255)
-end
+end --}}}
 
-function PPMImageTest:testAspectRatio()
+function PPMImageTest:testAspectRatio() --{{{
     local aspectRatio = self.testedImage:aspectRatio()
     assertEquals(aspectRatio[1], 3)
     assertEquals(aspectRatio[2], 2)
-end
-
+end --}}}
 -- PPMImageTest end }}}
 
-GeneticManager = {} -- class {{{
--- GeneticManager end }}}
+
+VectorImage = {} -- class {{{
+-- VectorObject end }}}
+
 
 function main(operation, inputFile, outputFile) --{{{
-
     if operation == "encode" then
         if inputFile == nil or outputFile == nil then
             error("Invalid command line parameters")
