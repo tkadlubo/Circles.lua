@@ -47,7 +47,7 @@ function PPMImage:readPPMFile(fileName)
             self.parserState = "aspectRatio"
         end,
         aspectRatio = function(self, line)
-            local width, height = line:match("(%d+) (%d+)")
+            local width, height = line:match("(%d+)%s+(%d+)")
             if width ~= nil and height ~=nil then
                 self.width = tonumber(width)
                 self.height = tonumber(height)
@@ -61,8 +61,33 @@ function PPMImage:readPPMFile(fileName)
                 error("PPM syntax error in line "..self.line_counter..": only 24bit images are supported")
             end
             self.parserState = "pixelData"
+            self.x = 1
+            self.y = 1
+            self.data = {{}}
         end,
         pixelData = function(self, line)
+            local R, G, B = line:match("(%d+)%s+(%d+)%s+(%d+)")
+            if R == nil or G == nil or B == nil then
+                error("PPM syntax error in line "..self.line_counter..": invalid pixel data: "..line)
+            end
+
+            table.insert(self.data[self.y], {R=tonumber(R), G=tonumber(G), B=tonumber(B)})
+
+            self.x = self.x + 1
+            if self.x > self.width then
+                self.x = 1
+                self.y = self.y + 1
+                table.insert(self.data, {})
+            end
+            
+            if self.y == self.height + 1 then
+                self.parserState = "eof"
+            end
+        end,
+        eof = function(self, line)
+            if line ~= nil then
+                error("PPM syntax error in line "..self.line_counter..": EOF expected")
+            end
         end
     }
     self.line_counter = 0
@@ -72,8 +97,15 @@ function PPMImage:readPPMFile(fileName)
             parserStateMachine[self.parserState](self, line)
         end
     end
+    if self.parserState ~= "eof" then
+         error("PPM syntax error at end of file")
+    end
 
     file:close()
+end
+
+function PPMImage:pixelAt(x, y)
+    return self.data[x][y]
 end
 
 function PPMImage:aspectRatio()
@@ -91,6 +123,11 @@ function PPMImageTest:testConstructor()
 end
 
 function PPMImageTest:testFileData()
+    local pixel22 = self.testedImage:pixelAt(2, 2)
+    assertEquals(type(pixel22), "table")
+    assertEquals(pixel22.R, 255)
+    assertEquals(pixel22.G, 255)
+    assertEquals(pixel22.B, 255)
 end
 
 function PPMImageTest:testAspectRatio()
