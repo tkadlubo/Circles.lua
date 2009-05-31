@@ -73,6 +73,23 @@ function assertEquals(actual, expected)
 	end
 end
 
+function assertBetween(actual, minimum, maximum)
+	local errorMsg
+	if actual < minimum then
+		errorMsg = "minimum: "..minimum..", actual: "..actual
+	end
+
+	if actual > maximum then
+		errorMsg = "maximum: "..maximum..", actual: "..actual
+	end
+	
+	if errorMsg ~= nil then
+		print (errorMsg)
+		error( errorMsg, 2)
+	end
+end
+
+assert_between = assertBetween
 assert_equals = assertEquals
 assert_error = assertError
 
