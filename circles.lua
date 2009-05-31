@@ -1,6 +1,5 @@
 #!/usr/bin/env lua
 
-
 Decoder = {} -- class {{{
 -- Decoder end }}}
 
@@ -14,17 +13,26 @@ function Encoder:new(o) --{{{
     return o
 end --}}}
 
-function Encoder:encode(image)
+function Encoder:encode(image) --{{{
     self.geneticManager:setTargetImage(image)
-end
+end --}}}
 -- Encoder end }}}
 
 
-GeneticManager = {} -- class {{{
+GeneticManager = { -- class {{{
+    populationSize = 5,
+    offsprintCount = 5
+}
 function GeneticManager:new(o) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
+    o.population = {}
+    for i = 1, o.populationSize, 1 do
+        newImage = VectorImage:new()
+        table.insert(o.population, newImage)
+        newImage:randomize()
+    end
     return o
 end --}}}
 
@@ -32,8 +40,15 @@ function GeneticManager:setTargetImage(image) --{{{
     self.targetImage = image
 end --}}}
 
-function GeneticManager:fitness(vectorImage) --{{{
-    return 0
+function GeneticManager:fitness(image) --{{{
+    sum = 0.0
+    for x = 1,image.width,1 do
+        for y = 1,image.height,1 do
+            local delta = self.targetImage:pixelAt(x, y) - image:pixelAt(x, y)
+            sum = sum + delta
+        end
+    end
+    return sum / (image.height * image.width)
 end --}}}
 -- GeneticManager end }}}
 GeneticManagerTest = {} -- class {{{
@@ -74,6 +89,29 @@ function PPMImage:aspectRatio() --{{{
     return {self.width, self.height}
 end --}}}
 
+function PPMImage:pixelIterator() --{{{
+    return coroutine.wrap(function() return self:pixelIteratorBody() end)
+end --}}}
+
+function PPMImage:pixelIteratorBody() --{{{
+    for y = 1, self.height, 1 do
+        for x = 1, self.width, 1 do 
+            coroutine.yield(self:pixelAt(x, y))
+        end
+    end
+end --}}}
+
+PPMImage.pixelMetatable = { --{{{
+    __sub = function(p1, p2)
+        return 1.0 - (p1.R-p2.R) * (p1.R-p2.R)
+                   - (p1.R-p2.G) * (p1.G-p2.G)
+                   - (p1.B-p2.B) * (p1.B-p2.B)
+    end,
+    __tostring = function(p)
+        return string.format("<R%d|G%d|B%d>", p.R, p.G, p.B)
+    end
+} --}}}
+
 function PPMImage:pixelAt(x, y) --{{{
     return self.data[y][x]
 end --}}}
@@ -102,6 +140,7 @@ function PPMImage:readPPMFile(fileName) --{{{
             self.parserState = "colorDepth"
         end, --}}}
         colorDepth = function(self, line) --{{{
+            self.depth = 255
             if line ~= "255" then
                 error("PPM syntax error in line "..self.line_counter..": only 24bit images are supported")
             end
@@ -117,7 +156,13 @@ function PPMImage:readPPMFile(fileName) --{{{
                     error("PPM syntax error in line "..self.line_counter..": invalid pixel data: "..line)
                 end
 
-                table.insert(self.data[self.y], {R=tonumber(R), G=tonumber(G), B=tonumber(B)})
+                local pixel = {
+                    R=tonumber(R)/self.depth,
+                    G=tonumber(G)/self.depth,
+                    B=tonumber(B)/self.depth
+                }
+                setmetatable(pixel, self.pixelMetatable)
+                table.insert(self.data[self.y], pixel)
 
                 self.x = self.x + 1
                 if self.x > self.width then
@@ -157,15 +202,14 @@ function PPMImage:writePPMFile(fileName) --{{{
     local file = io.open(fileName, "w")
     
     file:write("P3\n")
-    local aspectRatio = self:aspectRatio()
-    local width, height = aspectRatio[1], aspectRatio[2]
-    file:write(tostring(width).." "..tostring(height).."\n")
+    file:write(tostring(self.width).." "..tostring(self.height).."\n")
     file:write("255\n")
-    for y = 1, height, 1 do
-        for x = 1, width, 1 do 
-            local pixel = self:pixelAt(x, y)
-            file:write(tostring(pixel.R).." "..tostring(pixel.G).." "..tostring(pixel.B).."\n")
-        end
+    for pixel in self:pixelIterator() do
+        file:write(string.format("%d %d %d\n",
+            pixel.R * self.depth,
+            pixel.G * self.depth,
+            pixel.B * self.depth
+        ))
     end
 
     file:close()
@@ -189,9 +233,9 @@ end --}}}
 function PPMImageTest:testFileData() --{{{
     local pixel22 = self.testedImage:pixelAt(2, 2)
     assertEquals(type(pixel22), "table")
-    assertEquals(pixel22.R, 255)
-    assertEquals(pixel22.G, 255)
-    assertEquals(pixel22.B, 255)
+    assertEquals(pixel22.R, 1)
+    assertEquals(pixel22.G, 1)
+    assertEquals(pixel22.B, 1)
 end --}}}
 
 function PPMImageTest:testWrite() --{{{
@@ -202,7 +246,18 @@ end --}}}
 
 
 VectorImage = {} -- class {{{
--- VectorObject end }}}
+function VectorImage:new(o, data) --{{{
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end --}}}
+
+function VectorImage:randomize() --{{{
+end --}}}
+-- VectorImage end }}}
+VectorImageTest = {} -- class {{{
+-- VectorImageTest end }}}
 
 
 function main(operation, inputFile, outputFile) --{{{
