@@ -6,22 +6,54 @@ Decoder = {} -- class {{{
 
 
 Encoder = {} -- class {{{
-function Encoder:new(o)
+function Encoder:new(o) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
+    o.geneticManager = GeneticManager:new()
     return o
+end --}}}
+
+function Encoder:encode(image)
+    self.geneticManager:setTargetImage(image)
 end
 -- Encoder end }}}
 
 
 GeneticManager = {} -- class {{{
+function GeneticManager:new(o) --{{{
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end --}}}
+
+function GeneticManager:setTargetImage(image) --{{{
+    self.targetImage = image
+end --}}}
+
+function GeneticManager:fitness(vectorImage) --{{{
+    return 0
+end --}}}
 -- GeneticManager end }}}
+GeneticManagerTest = {} -- class {{{
+function GeneticManagerTest:setUp() --{{{
+    self.testedGeneticManager = GeneticManager:new()
+    self.testedGeneticManager:setTargetImage(PPMImage:new({}, "test.ppm"))
+end --}}}
+
+function GeneticManagerTest:testConstructor() --{{{
+    assertEquals(type(self.testedGeneticManager), "table")
+end --}}}
+
+function GeneticManagerTest:testFitnessFunction() --{{{
+    assertBetween(self.testedGeneticManager:fitness(self.testedGeneticManager.targetImage), 0.999, 1.001)
+end --}}}
+-- GeneticManagerTest end }}}
 
 
 Palette = {} -- class {{{
 -- Palette end }}}
-
 
 PPMImage = {} -- class {{{
 function PPMImage:new(o, image) --{{{
@@ -35,6 +67,14 @@ function PPMImage:new(o, image) --{{{
         o:renderVectorImage(image)
     end
     return o
+end --}}}
+
+function PPMImage:aspectRatio() --{{{
+    return {self.width, self.height}
+end --}}}
+
+function PPMImage:pixelAt(x, y) --{{{
+    return self.data[x][y]
 end --}}}
 
 function PPMImage:readPPMFile(fileName) --{{{
@@ -109,19 +149,17 @@ function PPMImage:readPPMFile(fileName) --{{{
 
     file:close()
 end --}}}
-
-function PPMImage:pixelAt(x, y) --{{{
-    return self.data[x][y]
-end --}}}
-
-function PPMImage:aspectRatio() --{{{
-    return {self.width, self.height}
-end --}}}
 -- PPMImage end }}}
 PPMImageTest = {} -- class {{{
 function PPMImageTest:setUp()
     self.testedImage = PPMImage:new({}, "test.ppm")
 end
+
+function PPMImageTest:testAspectRatio() --{{{
+    local aspectRatio = self.testedImage:aspectRatio()
+    assertEquals(aspectRatio[1], 3)
+    assertEquals(aspectRatio[2], 2)
+end --}}}
 
 function PPMImageTest:testConstructor() --{{{
     assertEquals(type(self.testedImage), "table")
@@ -135,11 +173,6 @@ function PPMImageTest:testFileData() --{{{
     assertEquals(pixel22.B, 255)
 end --}}}
 
-function PPMImageTest:testAspectRatio() --{{{
-    local aspectRatio = self.testedImage:aspectRatio()
-    assertEquals(aspectRatio[1], 3)
-    assertEquals(aspectRatio[2], 2)
-end --}}}
 -- PPMImageTest end }}}
 
 
@@ -153,7 +186,7 @@ function main(operation, inputFile, outputFile) --{{{
             error("Invalid command line parameters")
         end
         encoder = Encoder:new()
-        inputImage = PPMImage:new(inputFile)
+        inputImage = PPMImage:new({}, inputFile)
         outputImage = encoder:encode(inputImage)
         outputImage.writeTwit(outputFile)
         return
@@ -168,6 +201,7 @@ function main(operation, inputFile, outputFile) --{{{
         return
     elseif operation == "test" then
         require("luaunit")
+        LuaUnit:run("GeneticManagerTest")
         LuaUnit:run("PPMImageTest")
     else
         error("Unknown operation")
