@@ -55,6 +55,7 @@ end --}}}
 Palette = {} -- class {{{
 -- Palette end }}}
 
+
 PPMImage = {} -- class {{{
 function PPMImage:new(o, image) --{{{
     o = o or {}
@@ -74,7 +75,7 @@ function PPMImage:aspectRatio() --{{{
 end --}}}
 
 function PPMImage:pixelAt(x, y) --{{{
-    return self.data[x][y]
+    return self.data[y][x]
 end --}}}
 
 function PPMImage:readPPMFile(fileName) --{{{
@@ -149,6 +150,26 @@ function PPMImage:readPPMFile(fileName) --{{{
 
     file:close()
 end --}}}
+
+function PPMImage:writePPMFile(fileName) --{{{
+    assert(type(fileName) == "string")
+
+    local file = io.open(fileName, "w")
+    
+    file:write("P3\n")
+    local aspectRatio = self:aspectRatio()
+    local width, height = aspectRatio[1], aspectRatio[2]
+    file:write(tostring(width).." "..tostring(height).."\n")
+    file:write("255\n")
+    for y = 1, height, 1 do
+        for x = 1, width, 1 do 
+            local pixel = self:pixelAt(x, y)
+            file:write(tostring(pixel.R).." "..tostring(pixel.G).." "..tostring(pixel.B).."\n")
+        end
+    end
+
+    file:close()
+end --}}}
 -- PPMImage end }}}
 PPMImageTest = {} -- class {{{
 function PPMImageTest:setUp()
@@ -173,6 +194,10 @@ function PPMImageTest:testFileData() --{{{
     assertEquals(pixel22.B, 255)
 end --}}}
 
+function PPMImageTest:testWrite() --{{{
+    local tmpFile = os.tmpname()
+    self.testedImage:writePPMFile(tmpFile)
+end --}}}
 -- PPMImageTest end }}}
 
 
