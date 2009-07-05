@@ -21,7 +21,7 @@ end --}}}
 
 GeneticManager = { -- class {{{
     populationSize = 5,
-    offsprintCount = 5
+    offspringCount = 5
 }
 function GeneticManager:new(o) --{{{
     o = o or {}
@@ -59,6 +59,8 @@ end --}}}
 
 function GeneticManagerTest:testConstructor() --{{{
     assertEquals(type(self.testedGeneticManager), "table")
+    assertEquals(type(self.testedGeneticManager.population), "table")
+    assertEquals(#self.testedGeneticManager.population, self.testedGeneticManager.populationSize)
 end --}}}
 
 function GeneticManagerTest:testFitnessFunction() --{{{
@@ -68,6 +70,17 @@ end --}}}
 
 
 Palette = {} -- class {{{
+function Palette:new(o, data) --{{{
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    
+    return o
+end --}}}
+
+function Palette:randomize() --{{{
+end
+--}}}
 -- Palette end }}}
 
 
@@ -245,18 +258,62 @@ end --}}}
 -- PPMImageTest end }}}
 
 
-VectorImage = {} -- class {{{
+VectorImage = { -- class {{{
+    circlesCount = 10,
+    maxX = 100,
+    maxY = 100,
+    maxRadius = 50
+}
 function VectorImage:new(o, data) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
+    o.circles = {}
     return o
 end --}}}
 
-function VectorImage:randomize() --{{{
+function VectorImage:createRandomCircle() --{{{
+    return {
+        x = math.random(self.maxX),
+        y = math.random(self.maxY),
+        radius = math.random(self.maxRadius)
+    }
 end --}}}
+
+function VectorImage:randomize() --{{{
+    self.palette = Palette:new()
+    self.palette:randomize()
+    for i = 1,self.circlesCount,1 do
+        table.insert(self.circles, self:createRandomCircle())
+    end 
+end --}}}
+
 -- VectorImage end }}}
 VectorImageTest = {} -- class {{{
+function VectorImageTest:setUp() --{{{
+    self.testedImage = VectorImage:new()
+    self.testedImage:randomize()
+end --}}}
+
+function VectorImageTest:testConstructor() --{{{
+    assertEquals(type(self.testedImage), "table")
+end --}}}
+
+function VectorImageTest:testRandomizeCreatesCircles() --{{{
+    assertType(self.testedImage.circles, "table")
+    assertEquals(self.testedImage.circlesCount, #(self.testedImage.circles))
+end --}}}
+
+function VectorImageTest:testCirclesHaveDimensions() --{{{
+    assertType(self.testedImage.circlesCount, "number")
+    assertGreaterThan(0, self.testedImage.circlesCount)
+    for i = 1,self.testedImage.circlesCount, 1 do
+        assertType(self.testedImage.circles[i], "table")
+        assertBetween(self.testedImage.circles[i].radius, 0, self.testedImage.maxRadius)
+        assertBetween(self.testedImage.circles[i].x, 0, self.testedImage.maxX)
+        assertBetween(self.testedImage.circles[i].y, 0, self.testedImage.maxY)
+    end
+end --}}}
 -- VectorImageTest end }}}
 
 
@@ -281,8 +338,7 @@ function main(operation, inputFile, outputFile) --{{{
         return
     elseif operation == "test" then
         require("luaunit")
-        LuaUnit:run("GeneticManagerTest")
-        LuaUnit:run("PPMImageTest")
+        LuaUnit:run("GeneticManagerTest", "PPMImageTest", "VectorImageTest")
     else
         error("Unknown operation")
     end
