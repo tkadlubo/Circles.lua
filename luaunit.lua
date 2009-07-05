@@ -89,9 +89,29 @@ function assertBetween(actual, minimum, maximum)
 	end
 end
 
+function assertGreaterThan(min, actual)
+	local errorMsg
+	if not (min < actual) then
+		errorMsg = "Actual: ".. actual.." is not greater than "..min
+		print (errorMsg)
+		error( errorMsg, 2 )
+	end
+end
+
+function assertType(value, expectedType)
+	local errorMsg
+	if type(value) ~= expectedType then
+		errorMsg = ">>"..tostring(value).."<<: expected type: "..expectedType
+		print (errorMsg)
+		error( errorMsg, 2 )
+	end
+end
+
 assert_between = assertBetween
 assert_equals = assertEquals
 assert_error = assertError
+assert_greater_than = assertGreaterThan
+assert_type = assertType
 
 function wrapFunctions(...)
 	-- Use me to wrap a set of functions into a Runnable test class:
