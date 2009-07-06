@@ -69,19 +69,42 @@ end --}}}
 -- GeneticManagerTest end }}}
 
 
-Palette = {} -- class {{{
+Palette = { -- class {{{
+    colorCount = 10,
+}
 function Palette:new(o, data) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
     
+    o.colors = {}
     return o
 end --}}}
 
+function Palette:pickRandomColor()
+    return self.colors[math.random(self.colorCount)]
+end
+
 function Palette:randomize() --{{{
+    for i=1,self.colorCount,1 do
+        table.insert(self.colors, {
+            r = math.random(),
+            g = math.random(),
+            b = math.random()
+        })
+    end
 end
 --}}}
 -- Palette end }}}
+PaletteTest = {} -- class {{{
+function PaletteTest:setUp() -- {{{
+    self.testedPalette = Palette:new()
+end --}}}
+
+function PaletteTest:testRandomize()
+    self.testedPalette:randomize()
+end
+-- PaletteTest end }}}
 
 
 PPMImage = {} -- class {{{
@@ -292,7 +315,6 @@ end --}}}
 VectorImageTest = {} -- class {{{
 function VectorImageTest:setUp() --{{{
     self.testedImage = VectorImage:new()
-    self.testedImage:randomize()
 end --}}}
 
 function VectorImageTest:testConstructor() --{{{
@@ -300,11 +322,13 @@ function VectorImageTest:testConstructor() --{{{
 end --}}}
 
 function VectorImageTest:testRandomizeCreatesCircles() --{{{
+    self.testedImage:randomize()
     assertType(self.testedImage.circles, "table")
     assertEquals(self.testedImage.circlesCount, #(self.testedImage.circles))
 end --}}}
 
 function VectorImageTest:testCirclesHaveDimensions() --{{{
+    self.testedImage:randomize()
     assertType(self.testedImage.circlesCount, "number")
     assertGreaterThan(0, self.testedImage.circlesCount)
     for i = 1,self.testedImage.circlesCount, 1 do
@@ -338,7 +362,7 @@ function main(operation, inputFile, outputFile) --{{{
         return
     elseif operation == "test" then
         require("luaunit")
-        LuaUnit:run("GeneticManagerTest", "PPMImageTest", "VectorImageTest")
+        LuaUnit:run("GeneticManagerTest", "PaletteTest", "PPMImageTest", "VectorImageTest")
     else
         error("Unknown operation")
     end
