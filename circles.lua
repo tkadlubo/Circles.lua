@@ -1,5 +1,7 @@
 #!/usr/bin/env lua
 
+math.randomseed(os.time())
+
 Decoder = { -- class {{{
     className = "Decoder"
 }
@@ -19,8 +21,25 @@ end --}}}
 
 function Encoder:encode(image) --{{{
     self.geneticManager:setTargetImage(image)
+    local best = self.geneticManager:getBestFit()
+    local bestFitness = self.geneticManager:fitness(best)
+    print("Best fit: "..bestFitness)
+    local generation = 0
+    while true do
+        generation = generation + 1
+        print("Generation: "..generation)
+        self.geneticManager:nextGeneration()
+        local nextBest = self.geneticManager:getBestFit()
+        local nextBestFitness = self.geneticManager:fitness(nextBest)
+        if nextBestFitness > bestFitness then
+            bestFitness = nextBestFitness
+            best = nextBest
+            
+            print("Best fit in generation "..generation..": "..bestFitness)
+            best:rasterize():writePPMFile("best"..generation..".ppm")
+        end
+    end
 
-    return self.geneticManager:getBestFit()
 end --}}}
 -- Encoder end }}}
 
@@ -38,17 +57,30 @@ function GeneticManager:new(o) --{{{
     return o
 end --}}}
 
-function GeneticManager:next_generation() --{{{
+function GeneticManager:nextGeneration() --{{{
+    for i = 1,self.offspringCount do
+        local newImage = VectorImage:new()
+        newImage:setSize(self.targetImage.width, self.targetImage.height)
+        newImage:randomize()
+        table.insert(self.population, newImage)
+    end
+    self:sortPopulation()
+    for i = self.populationSize+1, #self.population do
+        self.population[i] = nil
+    end
+    
+    collectgarbage("collect")
 end --}}}
 
 function GeneticManager:setTargetImage(image) --{{{
     self.targetImage = image
-    for i = 1, self.populationSize, 1 do
+    for i = 1, self.populationSize do
         local newImage = VectorImage:new()
-        table.insert(self.population, newImage)
         newImage:setSize(image.width, image.height)
         newImage:randomize()
+        table.insert(self.population, newImage)
     end
+    self:sortPopulation()
 end --}}}
 
 function GeneticManager:fitness(image) --{{{
@@ -59,7 +91,10 @@ function GeneticManager:fitness(image) --{{{
         ppmImage = image:rasterize()
     end
 
-    ppmImage:writePPMFile("foo.txt")
+    if ppmImage.fitness ~= nil then
+        return ppmImage.fitness
+    end
+
     sum = 0.0
     for x = 1,ppmImage.width,1 do
         for y = 1,ppmImage.height,1 do
@@ -67,23 +102,20 @@ function GeneticManager:fitness(image) --{{{
             sum = sum + delta
         end
     end
-    return sum / (ppmImage.height * ppmImage.width)
+    ppmImage.fitness = sum / (ppmImage.height * ppmImage.width)
+    return ppmImage.fitness
 end --}}}
 
 function GeneticManager:sortPopulation() --{{{
     table.sort(
         self.population,
         function(a, b)
-            local aFitness, bFitness = self:fitness(a), self:fitness(b)
-            if aFitness < bFitness then return 1 end
-            if aFitness == bFitness then return 0 end
-            return -1
+            return self:fitness(a) > self:fitness(b)
         end
     )
 end --}}}
 
 function GeneticManager:getBestFit() --{{{
-    self:sortPopulation()
     return self.population[1]
 end --}}}
 -- GeneticManager end }}}
@@ -97,12 +129,19 @@ end --}}}
 
 function GeneticManagerTest:testConstructor() --{{{
     assertEquals(type(self.testedGeneticManager), "table")
-    assertEquals(type(self.testedGeneticManager.population), "table")
-    assertEquals(#self.testedGeneticManager.population, self.testedGeneticManager.populationSize)
 end --}}}
 
 function GeneticManagerTest:testFitnessFunction() --{{{
     assertBetween(self.testedGeneticManager:fitness(self.testedGeneticManager.targetImage), 0.999, 1.001)
+end --}}}
+
+function GeneticManagerTest:testPopulation() --{{{
+    assertEquals(type(self.testedGeneticManager.population), "table")
+    assertEquals(#self.testedGeneticManager.population, self.testedGeneticManager.populationSize)
+    for _,vectorImage in ipairs(self.testedGeneticManager.population) do
+        assertType(vectorImage, "table")
+        assertEquals(vectorImage.className, "VectorImage")
+    end
 end --}}}
 -- GeneticManagerTest end }}}
 
@@ -120,16 +159,16 @@ function Palette:new(o, data) --{{{
     return o
 end --}}}
 
-function Palette:pickRandomColor()
+function Palette:getRandomColor()
     return self.colors[math.random(self.colorCount)]
 end
 
 function Palette:randomize() --{{{
     for i=1,self.colorCount,1 do
         table.insert(self.colors, {
-            r = math.random(),
-            g = math.random(),
-            b = math.random()
+            R = math.random(),
+            G = math.random(),
+            B = math.random()
         })
     end
 end
@@ -163,6 +202,7 @@ function PPMImage:new(o, image) --{{{
 end --}}}
 
 function PPMImage:renderVectorImage(image) --{{{
+    self.depth = 255
     self.width, self.height = image.width, image.height
     self.data = {}
     for row = 1,self.height do
@@ -170,6 +210,30 @@ function PPMImage:renderVectorImage(image) --{{{
         table.insert(self.data, new_row)
         for col = 1,self.width do
             table.insert(new_row, { R=0.0, G=0.0, B=0.0})
+        end
+    end
+    
+    for _,circle in ipairs(image.circles) do
+        self:renderCircle(circle)
+    end
+end --}}}
+
+function PPMImage:renderCircle(circle) --{{{
+    local minX, maxX, minY, maxY
+    local color = circle.color
+    local rSquared = circle.radius * circle.radius
+    minX = math.max(1, circle.x - circle.radius)
+    maxX = math.min(self.width, circle.x + circle.radius)
+    minY = math.max(1, circle.y - circle.radius)
+    maxY = math.min(self.width, circle.y + circle.radius)
+    for x = minX, maxX do
+        for y = minY, maxY do
+            if (x - circle.x)*(x - circle.x) + (y - circle.y)*(y - circle.y) <= rSquared then
+                local pixel = self.data[y][x]
+                pixel.R = color.R
+                pixel.G = color.G
+                pixel.B = color.B
+            end
         end
     end
 end --}}}
@@ -336,7 +400,7 @@ end --}}}
 
 VectorImage = { -- class {{{
     className = "VectorImage",
-    circlesCount = 10,
+    circlesCount = 15,
 }
 function VectorImage:new(o, data) --{{{
     o = o or {}
@@ -350,14 +414,15 @@ function VectorImage:createRandomCircle() --{{{
     return {
         x = math.random(self.width),
         y = math.random(self.height),
-        radius = math.random(self.maxRadius)
+        radius = math.random(self.maxRadius),
+        color = self.palette:getRandomColor()
     }
 end --}}}
 
 function VectorImage:setSize(width, height)
     self.width = width
     self.height = height
-    self.maxRadius = width + height
+    self.maxRadius = math.floor(math.min(width, height)/2)
 end
 
 function VectorImage:randomize() --{{{
@@ -373,9 +438,14 @@ function VectorImage:rasterize() --{{{
         return self.rasterizedImage
     end
 
-    self.rasterizedImage = PPMImage:new(self)
+    self.rasterizedImage = PPMImage:new({}, self)
     return self.rasterizedImage
 end --}}}
+
+function VectorImage:writeTwit(outputFile)
+    local ppmImage = self:rasterize()
+    ppmImage:writePPMFile(outputFile)
+end
 
 -- VectorImage end }}}
 VectorImageTest = {} -- class {{{
@@ -407,13 +477,16 @@ function VectorImageTest:testCirclesHaveDimensions() --{{{
     end
 end --}}}
 
-function VectorImageTest:testRasterize()
+function VectorImageTest:testRasterize() --{{{
     self.testedImage:setSize(3, 4)
     self.testedImage:randomize()
     local ppmImage = self.testedImage:rasterize()
     assertEquals(ppmImage.width, 3)
     assertEquals(ppmImage.height, 4)
-end
+    assertType(ppmImage.data, "table")
+    assertEquals(#(ppmImage.data), 4)
+    assertEquals(#(ppmImage.data[1]), 3)
+end --}}}
 -- VectorImageTest end }}}
 
 
@@ -425,7 +498,7 @@ function main(operation, inputFile, outputFile) --{{{
         encoder = Encoder:new()
         inputImage = PPMImage:new({}, inputFile)
         outputImage = encoder:encode(inputImage)
-        outputImage.writeTwit(outputFile)
+        outputImage:writeTwit(outputFile)
         return
     elseif operation == "decode" then
         if inputFile == nil or outputFile == nil then
