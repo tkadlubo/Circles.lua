@@ -1,10 +1,14 @@
 #!/usr/bin/env lua
 
-Decoder = {} -- class {{{
+Decoder = { -- class {{{
+    className = "Decoder"
+}
 -- Decoder end }}}
 
 
-Encoder = {} -- class {{{
+Encoder = { -- class {{{
+    className = "Encoder"
+}
 function Encoder:new(o) --{{{
     o = o or {}
     setmetatable(o, self)
@@ -15,11 +19,14 @@ end --}}}
 
 function Encoder:encode(image) --{{{
     self.geneticManager:setTargetImage(image)
+
+    return self.geneticManager:getBestFit()
 end --}}}
 -- Encoder end }}}
 
 
 GeneticManager = { -- class {{{
+    className = "GeneticManager",
     populationSize = 5,
     offspringCount = 5
 }
@@ -36,22 +43,42 @@ function GeneticManager:new(o) --{{{
     return o
 end --}}}
 
+function GeneticManager:next_generation() --{{{
+end --}}}
+
 function GeneticManager:setTargetImage(image) --{{{
     self.targetImage = image
 end --}}}
 
-function GeneticManager:fitness(image) --{{{
+function GeneticManager:fitness(vectorImage) --{{{
+    local ppmImage = vectorImage:rasterize()
     sum = 0.0
-    for x = 1,image.width,1 do
-        for y = 1,image.height,1 do
-            local delta = self.targetImage:pixelAt(x, y) - image:pixelAt(x, y)
+    for x = 1,ppmImage.width,1 do
+        for y = 1,ppmImage.height,1 do
+            local delta = self.targetImage:pixelAt(x, y) - ppmImage:pixelAt(x, y)
             sum = sum + delta
         end
     end
-    return sum / (image.height * image.width)
+    return sum / (ppmImage.height * ppmImage.width)
+end --}}}
+
+function GeneticManager:sortPopulation() --{{{
+    table.sort(
+        self.population,
+        function(a, b)
+            local aFitness, bFitness = self:fitness(a), self:fitness(b)
+        end
+    )
+end --}}}
+
+function GeneticManager:getBestFit() --{{{
+    self:sortPopulation()
+    return self.population[1]
 end --}}}
 -- GeneticManager end }}}
-GeneticManagerTest = {} -- class {{{
+GeneticManagerTest = { -- class {{{
+    className = GeneticManagerTest
+}
 function GeneticManagerTest:setUp() --{{{
     self.testedGeneticManager = GeneticManager:new()
     self.testedGeneticManager:setTargetImage(PPMImage:new({}, "test.ppm"))
@@ -70,6 +97,7 @@ end --}}}
 
 
 Palette = { -- class {{{
+    className = "Palette",
     colorCount = 10,
 }
 function Palette:new(o, data) --{{{
@@ -119,6 +147,18 @@ function PPMImage:new(o, image) --{{{
         o:renderVectorImage(image)
     end
     return o
+end --}}}
+
+function PPMImage:renderVectorImage(image) --{{{
+    self.width, self.height = image.width, image.height
+    self.data = {}
+    for row = 1,self.height do
+        local new_row = {}
+        table.insert(self.data, new_row)
+        for col = 1,self.width do
+            table.insert(new_row, { R=0.0, G=0.0, B=0.0})
+        end
+    end
 end --}}}
 
 function PPMImage:aspectRatio() --{{{
@@ -309,6 +349,15 @@ function VectorImage:randomize() --{{{
     for i = 1,self.circlesCount,1 do
         table.insert(self.circles, self:createRandomCircle())
     end 
+end --}}}
+
+function VectorImage:rasterize() --{{{
+    if self.rasterizedImage ~= nil then
+        return self.rasterizedImage
+    end
+
+    self.rasterizedImage = PPMImage:new(self)
+    return self.rasterizedImage
 end --}}}
 
 -- VectorImage end }}}
