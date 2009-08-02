@@ -35,11 +35,6 @@ function GeneticManager:new(o) --{{{
     setmetatable(o, self)
     self.__index = self
     o.population = {}
-    for i = 1, o.populationSize, 1 do
-        newImage = VectorImage:new()
-        table.insert(o.population, newImage)
-        newImage:randomize()
-    end
     return o
 end --}}}
 
@@ -48,10 +43,23 @@ end --}}}
 
 function GeneticManager:setTargetImage(image) --{{{
     self.targetImage = image
+    for i = 1, self.populationSize, 1 do
+        local newImage = VectorImage:new()
+        table.insert(self.population, newImage)
+        newImage:setSize(image.width, image.height)
+        newImage:randomize()
+    end
 end --}}}
 
-function GeneticManager:fitness(vectorImage) --{{{
-    local ppmImage = vectorImage:rasterize()
+function GeneticManager:fitness(image) --{{{
+    local ppmImage
+    if image.className == "PPMImage" then
+        ppmImage = image
+    else
+        ppmImage = image:rasterize()
+    end
+
+    ppmImage:writePPMFile("foo.txt")
     sum = 0.0
     for x = 1,ppmImage.width,1 do
         for y = 1,ppmImage.height,1 do
@@ -67,6 +75,9 @@ function GeneticManager:sortPopulation() --{{{
         self.population,
         function(a, b)
             local aFitness, bFitness = self:fitness(a), self:fitness(b)
+            if aFitness < bFitness then return 1 end
+            if aFitness == bFitness then return 0 end
+            return -1
         end
     )
 end --}}}
@@ -135,7 +146,9 @@ end
 -- PaletteTest end }}}
 
 
-PPMImage = {} -- class {{{
+PPMImage = { -- class {{{
+    className = "PPMImage"
+}
 function PPMImage:new(o, image) --{{{
     o = o or {}
     setmetatable(o, self)
@@ -322,10 +335,8 @@ end --}}}
 
 
 VectorImage = { -- class {{{
+    className = "VectorImage",
     circlesCount = 10,
-    maxX = 100,
-    maxY = 100,
-    maxRadius = 50
 }
 function VectorImage:new(o, data) --{{{
     o = o or {}
@@ -337,18 +348,24 @@ end --}}}
 
 function VectorImage:createRandomCircle() --{{{
     return {
-        x = math.random(self.maxX),
-        y = math.random(self.maxY),
+        x = math.random(self.width),
+        y = math.random(self.height),
         radius = math.random(self.maxRadius)
     }
 end --}}}
+
+function VectorImage:setSize(width, height)
+    self.width = width
+    self.height = height
+    self.maxRadius = width + height
+end
 
 function VectorImage:randomize() --{{{
     self.palette = Palette:new()
     self.palette:randomize()
     for i = 1,self.circlesCount,1 do
         table.insert(self.circles, self:createRandomCircle())
-    end 
+    end
 end --}}}
 
 function VectorImage:rasterize() --{{{
@@ -371,22 +388,32 @@ function VectorImageTest:testConstructor() --{{{
 end --}}}
 
 function VectorImageTest:testRandomizeCreatesCircles() --{{{
+    self.testedImage:setSize(3, 4)
     self.testedImage:randomize()
     assertType(self.testedImage.circles, "table")
     assertEquals(self.testedImage.circlesCount, #(self.testedImage.circles))
 end --}}}
 
 function VectorImageTest:testCirclesHaveDimensions() --{{{
+    self.testedImage:setSize(3, 4)
     self.testedImage:randomize()
     assertType(self.testedImage.circlesCount, "number")
     assertGreaterThan(0, self.testedImage.circlesCount)
     for i = 1,self.testedImage.circlesCount, 1 do
         assertType(self.testedImage.circles[i], "table")
         assertBetween(self.testedImage.circles[i].radius, 0, self.testedImage.maxRadius)
-        assertBetween(self.testedImage.circles[i].x, 0, self.testedImage.maxX)
-        assertBetween(self.testedImage.circles[i].y, 0, self.testedImage.maxY)
+        assertBetween(self.testedImage.circles[i].x, 0, self.testedImage.width)
+        assertBetween(self.testedImage.circles[i].y, 0, self.testedImage.height)
     end
 end --}}}
+
+function VectorImageTest:testRasterize()
+    self.testedImage:setSize(3, 4)
+    self.testedImage:randomize()
+    local ppmImage = self.testedImage:rasterize()
+    assertEquals(ppmImage.width, 3)
+    assertEquals(ppmImage.height, 4)
+end
 -- VectorImageTest end }}}
 
 
