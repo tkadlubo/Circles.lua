@@ -31,6 +31,7 @@ function Encoder:encode(image) --{{{
         self.geneticManager:nextGeneration()
         local nextBest = self.geneticManager:getBestFit()
         local nextBestFitness = self.geneticManager:fitness(nextBest)
+        nextBest:rasterize():writePPMFile("gen"..generation..".ppm")
         if nextBestFitness > bestFitness then
             bestFitness = nextBestFitness
             best = nextBest
@@ -58,12 +59,16 @@ function GeneticManager:new(o) --{{{
 end --}}}
 
 function GeneticManager:nextGeneration() --{{{
+    -- One mutant, just for the kicks!
     for i = 1,self.offspringCount do
-        local newImage = VectorImage:new()
-        newImage:setSize(self.targetImage.width, self.targetImage.height)
-        newImage:randomize()
+        local parent1 = self.population[math.random(#(self.population))]
+        local parent2 = self.population[math.random(#(self.population))]
+
+        local newImage = parent1..parent2
+
         table.insert(self.population, newImage)
     end
+
     self:sortPopulation()
     for i = self.populationSize+1, #self.population do
         self.population[i] = nil
@@ -150,7 +155,7 @@ Palette = { -- class {{{
     className = "Palette",
     colorCount = 10,
 }
-function Palette:new(o, data) --{{{
+function Palette:new(o) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -159,20 +164,44 @@ function Palette:new(o, data) --{{{
     return o
 end --}}}
 
-function Palette:getRandomColor()
+function Palette:getRandomColor() --{{{
     return self.colors[math.random(self.colorCount)]
-end
+end --}}}
+
+function Palette:randomizeColor() --{{{
+    return {
+        R = math.random(),
+        G = math.random(),
+        B = math.random()
+    }
+end --}}}
 
 function Palette:randomize() --{{{
     for i=1,self.colorCount,1 do
-        table.insert(self.colors, {
-            R = math.random(),
-            G = math.random(),
-            B = math.random()
-        })
+        table.insert(self.colors, self:randomizeColor())
     end
-end
---}}}
+end --}}}
+
+function Palette.__concat(p1, p2) --{{{
+-- concatenation metaoperation means genetic crossover
+    local newPalette = Palette:new()
+
+    local color
+    for i = 1,newPalette.colorCount do
+        local random = math.random(20)
+        if random >= 19 then
+            table.insert(newPalette.colors, newPalette:randomizeColor())
+        else
+            table.insert(newPalette.colors, {
+                R = ((p1.colors[i].R * random) + (p2.colors[i].R * (19 - random))) / 19,
+                G = ((p1.colors[i].G * random) + (p2.colors[i].G * (19 - random))) / 19,
+                B = ((p1.colors[i].B * random) + (p2.colors[i].B * (19 - random))) / 19
+            })
+        end
+    end
+
+    return newPalette
+end --}}}
 -- Palette end }}}
 PaletteTest = {} -- class {{{
 function PaletteTest:setUp() -- {{{
@@ -225,14 +254,14 @@ function PPMImage:renderCircle(circle) --{{{
     minX = math.max(1, circle.x - circle.radius)
     maxX = math.min(self.width, circle.x + circle.radius)
     minY = math.max(1, circle.y - circle.radius)
-    maxY = math.min(self.width, circle.y + circle.radius)
+    maxY = math.min(self.height, circle.y + circle.radius)
     for x = minX, maxX do
         for y = minY, maxY do
             if (x - circle.x)*(x - circle.x) + (y - circle.y)*(y - circle.y) <= rSquared then
                 local pixel = self.data[y][x]
-                pixel.R = color.R
-                pixel.G = color.G
-                pixel.B = color.B
+                pixel.R = (pixel.R + color.R) / 2
+                pixel.G = (pixel.G + color.G) / 2
+                pixel.B = (pixel.G + color.B) / 2
             end
         end
     end
@@ -400,7 +429,7 @@ end --}}}
 
 VectorImage = { -- class {{{
     className = "VectorImage",
-    circlesCount = 15,
+    circlesCount = 25,
 }
 function VectorImage:new(o, data) --{{{
     o = o or {}
@@ -442,11 +471,35 @@ function VectorImage:rasterize() --{{{
     return self.rasterizedImage
 end --}}}
 
-function VectorImage:writeTwit(outputFile)
+function VectorImage:writeTwit(outputFile) --{{{
     local ppmImage = self:rasterize()
     ppmImage:writePPMFile(outputFile)
-end
+end --}}}
 
+function VectorImage.__concat(v1, v2)
+    local newVectorImage = VectorImage:new()
+    newVectorImage:setSize(v1.width, v2.height)
+    newVectorImage.palette = v1.palette..v2.palette
+
+    local circle
+    for i = 1,newVectorImage.circlesCount do
+        local random = math.random(20)
+        if random >= 19 then
+            table.insert(newVectorImage.circles, newVectorImage:createRandomCircle())
+        else
+            local circle1 = v1.circles[i]
+            local circle2 = v2.circles[i]
+            table.insert(newVectorImage.circles, {
+                x = ((circle1.x * random) + (circle2.x * (19 - random))) / 19,
+                y = ((circle1.y * random) + (circle2.y * (19 - random))) / 19,
+                radius = ((circle1.radius * random) + (circle2.radius * (19 - random))) / 19,
+                color = newVectorImage.palette:getRandomColor()
+            })
+        end
+    end
+
+    return newPalette
+end
 -- VectorImage end }}}
 VectorImageTest = {} -- class {{{
 function VectorImageTest:setUp() --{{{
