@@ -284,11 +284,11 @@ function PPMImage:renderVectorImage(image) --{{{
     end
     
     for _,circle in ipairs(image.circles) do
-        self:renderCircle(circle)
+        self:renderCircle(circle, image.palette:getColor(circle.color))
     end
 end --}}}
 
-function PPMImage:renderCircle(circle) --{{{
+function PPMImage:renderCircle(circle, color) --{{{
     local minX, maxX, minY, maxY
     local rSquared = circle.radius * circle.radius
     minX = math.max(1, circle.x - circle.radius)
@@ -299,9 +299,9 @@ function PPMImage:renderCircle(circle) --{{{
         for y = minY, maxY do
             if (x - circle.x)*(x - circle.x) + (y - circle.y)*(y - circle.y) <= rSquared then
                 local pixel = self.data[y][x]
-                pixel.R = (pixel.R + circle.R) / 2
-                pixel.G = (pixel.G + circle.G) / 2
-                pixel.B = (pixel.G + circle.B) / 2
+                pixel.R = (pixel.R + color.R) / 2
+                pixel.G = (pixel.G + color.G) / 2
+                pixel.B = (pixel.G + color.B) / 2
             end
         end
     end
@@ -503,9 +503,7 @@ function VectorImage:createRandomCircle() --{{{
         x = math.random(self.width),
         y = math.random(self.height),
         radius = math.random(self.maxRadius),
-        R = math.random(),
-        G = math.random(),
-        B = math.random()
+        color = self.palette:getRandomColor()
     }
 end --}}}
 
@@ -516,6 +514,8 @@ function VectorImage:setSize(width, height) --{{{
 end --}}}
 
 function VectorImage:randomize() --{{{
+    self.palette = Palette:new()
+    self.palette:randomize()
     for i = 1,self.circlesCount,1 do
         table.insert(self.circles, self:createRandomCircle())
     end
@@ -538,33 +538,15 @@ end --}}}
 function VectorImage.__concat(v1, v2)
     local newVectorImage = VectorImage:new({}, v1.defaultBackgroundColor)
     newVectorImage:setSize(v1.width, v1.height)
+    newVectorImage.palette = v1.palette..v2.palette
 
     for i = 1,newVectorImage.circlesCount do
         local randomX = math.random(20)
         local randomY = math.random(20)
         local randomRadius = math.random(20)
-        local randomR = math.random(20)
-        local randomG = math.random(20)
-        local randomB = math.random(20)
         local circle1 = v1.circles[i]
         local circle2 = v2.circles[i]
         local newCircle = {color = circle1.color}
-
-        if randomR >= 19 then
-            newCircle.R = math.random()
-        else
-            newCircle.R = math.floor(((circle1.R * randomR) + (circle2.R * (19 - randomR))) / 19)
-        end
-        if randomG >= 19 then
-            newCircle.G = math.random()
-        else
-            newCircle.G = math.floor(((circle1.G * randomG) + (circle2.G * (19 - randomG))) / 19)
-        end
-        if randomB >= 19 then
-            newCircle.B = math.random()
-        else
-            newCircle.B = math.floor(((circle1.B * randomB) + (circle2.B * (19 - randomB))) / 19)
-        end
 
         if randomX >= 19 then
             newCircle.x = math.random(v1.width)
