@@ -27,10 +27,10 @@ function Encoder:encode(image) --{{{
     local generation = 0
     while true do
         generation = generation + 1
-        print("Generation: "..generation)
         self.geneticManager:nextGeneration()
         local nextBest = self.geneticManager:getBestFit()
         local nextBestFitness = self.geneticManager:fitness(nextBest)
+        print("Generation: "..generation.."\t Avg. fitness: "..self.geneticManager:averageFitness().."\t Best fitness: "..nextBestFitness)
         nextBest:rasterize():writePPMFile("gen"..generation..".ppm")
         if nextBestFitness > bestFitness then
             bestFitness = nextBestFitness
@@ -47,8 +47,8 @@ end --}}}
 
 GeneticManager = { -- class {{{
     className = "GeneticManager",
-    populationSize = 5,
-    offspringCount = 5
+    populationSize = 35,
+    offspringCount = 15
 }
 function GeneticManager:new(o) --{{{
     o = o or {}
@@ -59,8 +59,7 @@ function GeneticManager:new(o) --{{{
 end --}}}
 
 function GeneticManager:nextGeneration() --{{{
-    -- One mutant, just for the kicks!
-    for i = 1,self.offspringCount do
+    for i = 1,#self.population do
         local parent1 = self.population[math.random(#(self.population))]
         local parent2 = self.population[math.random(#(self.population))]
 
@@ -79,8 +78,9 @@ end --}}}
 
 function GeneticManager:setTargetImage(image) --{{{
     self.targetImage = image
+    self.defaultBackgroundColor = image:getAverageColor()
     for i = 1, self.populationSize do
-        local newImage = VectorImage:new()
+        local newImage = VectorImage:new({}, self.defaultBackgroundColor)
         newImage:setSize(image.width, image.height)
         newImage:randomize()
         table.insert(self.population, newImage)
@@ -110,6 +110,15 @@ function GeneticManager:fitness(image) --{{{
     ppmImage.fitness = sum / (ppmImage.height * ppmImage.width)
     return ppmImage.fitness
 end --}}}
+
+function GeneticManager:averageFitness()
+    sum = 0.0
+    for i,image in ipairs(self.population) do
+        sum = sum + self:fitness(image)
+    end
+
+    return sum/#self.population
+end
 
 function GeneticManager:sortPopulation() --{{{
     table.sort(
@@ -148,12 +157,24 @@ function GeneticManagerTest:testPopulation() --{{{
         assertEquals(vectorImage.className, "VectorImage")
     end
 end --}}}
+
+function GeneticManagerTest:testNextGeneration() --{{{
+    local oldPopulation = self.testedGeneticManager.population
+    self.testedGeneticManager:nextGeneration()
+    for i,image in ipairs(self.testedGeneticManager.population) do
+        assertType(image, "table")
+        assertEquals(image.className, "VectorImage")
+        for _, oldImage in ipairs(oldPopulation) do
+            assertNotEquals(image, oldImage)
+        end
+    end
+end --}}}
 -- GeneticManagerTest end }}}
 
 
 Palette = { -- class {{{
     className = "Palette",
-    colorCount = 10,
+    colorCount = 7,
 }
 function Palette:new(o) --{{{
     o = o or {}
@@ -165,7 +186,11 @@ function Palette:new(o) --{{{
 end --}}}
 
 function Palette:getRandomColor() --{{{
-    return self.colors[math.random(self.colorCount)]
+    return math.random(self.colorCount)
+end --}}}
+
+function Palette:getColor(index) --{{{
+    return self.colors[index]
 end --}}}
 
 function Palette:randomizeColor() --{{{
@@ -188,16 +213,28 @@ function Palette.__concat(p1, p2) --{{{
 
     local color
     for i = 1,newPalette.colorCount do
-        local random = math.random(20)
-        if random >= 19 then
-            table.insert(newPalette.colors, newPalette:randomizeColor())
+        local randomR = math.random(20)
+        local randomG = math.random(20)
+        local randomB = math.random(20)
+
+        local newColor = {}
+        if randomR >= 19 then
+            newColor.R = math.random()
         else
-            table.insert(newPalette.colors, {
-                R = ((p1.colors[i].R * random) + (p2.colors[i].R * (19 - random))) / 19,
-                G = ((p1.colors[i].G * random) + (p2.colors[i].G * (19 - random))) / 19,
-                B = ((p1.colors[i].B * random) + (p2.colors[i].B * (19 - random))) / 19
-            })
+            newColor.R = ((p1.colors[i].R * randomR) + (p2.colors[i].R * (19 - randomR))) / 19
         end
+        if randomG >= 19 then
+            newColor.G = math.random()
+        else
+            newColor.G = ((p1.colors[i].G * randomG) + (p2.colors[i].G * (19 - randomG))) / 19
+        end
+        if randomB >= 19 then
+            newColor.B = math.random()
+        else
+            newColor.B = ((p1.colors[i].B * randomB) + (p2.colors[i].B * (19 - randomB))) / 19
+        end
+
+        table.insert(newPalette.colors, newColor)
     end
 
     return newPalette
@@ -231,6 +268,10 @@ function PPMImage:new(o, image) --{{{
 end --}}}
 
 function PPMImage:renderVectorImage(image) --{{{
+    local backgroundColor = image.defaultBackgroundColor
+    local R = backgroundColor.R
+    local G = backgroundColor.G
+    local B = backgroundColor.B
     self.depth = 255
     self.width, self.height = image.width, image.height
     self.data = {}
@@ -238,7 +279,7 @@ function PPMImage:renderVectorImage(image) --{{{
         local new_row = {}
         table.insert(self.data, new_row)
         for col = 1,self.width do
-            table.insert(new_row, { R=0.0, G=0.0, B=0.0})
+            table.insert(new_row, { R=R, G=G, B=B})
         end
     end
     
@@ -249,7 +290,6 @@ end --}}}
 
 function PPMImage:renderCircle(circle) --{{{
     local minX, maxX, minY, maxY
-    local color = circle.color
     local rSquared = circle.radius * circle.radius
     minX = math.max(1, circle.x - circle.radius)
     maxX = math.min(self.width, circle.x + circle.radius)
@@ -259,12 +299,30 @@ function PPMImage:renderCircle(circle) --{{{
         for y = minY, maxY do
             if (x - circle.x)*(x - circle.x) + (y - circle.y)*(y - circle.y) <= rSquared then
                 local pixel = self.data[y][x]
-                pixel.R = (pixel.R + color.R) / 2
-                pixel.G = (pixel.G + color.G) / 2
-                pixel.B = (pixel.G + color.B) / 2
+                pixel.R = (pixel.R + circle.R) / 2
+                pixel.G = (pixel.G + circle.G) / 2
+                pixel.B = (pixel.G + circle.B) / 2
             end
         end
     end
+end --}}}
+
+function PPMImage:getAverageColor() --{{{
+    local R = 0
+    local G = 0
+    local B = 0
+    for x = 1,self.width do
+        for y = 1,self.height do 
+            R = R + self.data[y][x].R
+            G = G + self.data[y][x].G
+            B = B + self.data[y][x].B
+        end
+    end
+    return {
+        R = R / (self.width * self.height),
+        G = G / (self.width * self.height),
+        B = B / (self.width * self.height)
+    }
 end --}}}
 
 function PPMImage:aspectRatio() --{{{
@@ -285,9 +343,9 @@ end --}}}
 
 PPMImage.pixelMetatable = { --{{{
     __sub = function(p1, p2)
-        return 1.0 - (p1.R-p2.R) * (p1.R-p2.R)
-                   - (p1.R-p2.G) * (p1.G-p2.G)
-                   - (p1.B-p2.B) * (p1.B-p2.B)
+        return 1.0 - ((p1.R-p2.R) ^ 2)
+                   - ((p1.R-p2.G) ^ 2)
+                   - ((p1.B-p2.B) ^ 2)
     end,
     __tostring = function(p)
         return string.format("<R%d|G%d|B%d>", p.R, p.G, p.B)
@@ -429,12 +487,13 @@ end --}}}
 
 VectorImage = { -- class {{{
     className = "VectorImage",
-    circlesCount = 25,
+    circlesCount = 45,
 }
-function VectorImage:new(o, data) --{{{
+function VectorImage:new(o, defaultBackgroundColor) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
+    self.defaultBackgroundColor = defaultBackgroundColor
     o.circles = {}
     return o
 end --}}}
@@ -444,19 +503,19 @@ function VectorImage:createRandomCircle() --{{{
         x = math.random(self.width),
         y = math.random(self.height),
         radius = math.random(self.maxRadius),
-        color = self.palette:getRandomColor()
+        R = math.random(),
+        G = math.random(),
+        B = math.random()
     }
 end --}}}
 
-function VectorImage:setSize(width, height)
+function VectorImage:setSize(width, height) --{{{
     self.width = width
     self.height = height
     self.maxRadius = math.floor(math.min(width, height)/2)
-end
+end --}}}
 
 function VectorImage:randomize() --{{{
-    self.palette = Palette:new()
-    self.palette:randomize()
     for i = 1,self.circlesCount,1 do
         table.insert(self.circles, self:createRandomCircle())
     end
@@ -477,28 +536,55 @@ function VectorImage:writeTwit(outputFile) --{{{
 end --}}}
 
 function VectorImage.__concat(v1, v2)
-    local newVectorImage = VectorImage:new()
-    newVectorImage:setSize(v1.width, v2.height)
-    newVectorImage.palette = v1.palette..v2.palette
+    local newVectorImage = VectorImage:new({}, v1.defaultBackgroundColor)
+    newVectorImage:setSize(v1.width, v1.height)
 
-    local circle
     for i = 1,newVectorImage.circlesCount do
-        local random = math.random(20)
-        if random >= 19 then
-            table.insert(newVectorImage.circles, newVectorImage:createRandomCircle())
+        local randomX = math.random(20)
+        local randomY = math.random(20)
+        local randomRadius = math.random(20)
+        local randomR = math.random(20)
+        local randomG = math.random(20)
+        local randomB = math.random(20)
+        local circle1 = v1.circles[i]
+        local circle2 = v2.circles[i]
+        local newCircle = {color = circle1.color}
+
+        if randomR >= 19 then
+            newCircle.R = math.random()
         else
-            local circle1 = v1.circles[i]
-            local circle2 = v2.circles[i]
-            table.insert(newVectorImage.circles, {
-                x = ((circle1.x * random) + (circle2.x * (19 - random))) / 19,
-                y = ((circle1.y * random) + (circle2.y * (19 - random))) / 19,
-                radius = ((circle1.radius * random) + (circle2.radius * (19 - random))) / 19,
-                color = newVectorImage.palette:getRandomColor()
-            })
+            newCircle.R = math.floor(((circle1.R * randomR) + (circle2.R * (19 - randomR))) / 19)
         end
+        if randomG >= 19 then
+            newCircle.G = math.random()
+        else
+            newCircle.G = math.floor(((circle1.G * randomG) + (circle2.G * (19 - randomG))) / 19)
+        end
+        if randomB >= 19 then
+            newCircle.B = math.random()
+        else
+            newCircle.B = math.floor(((circle1.B * randomB) + (circle2.B * (19 - randomB))) / 19)
+        end
+
+        if randomX >= 19 then
+            newCircle.x = math.random(v1.width)
+        else
+            newCircle.x = math.floor(((circle1.x * randomX) + (circle2.x * (19 - randomX))) / 19) + 1
+        end
+        if randomY >= 19 then
+            newCircle.y = math.random(v2.height)
+        else
+            newCircle.y = math.floor(((circle1.y * randomY) + (circle2.y * (19 - randomY))) / 19)  + 1
+        end
+        if randomRadius >= 19 then
+            newCircle.radius = math.random(v1.maxRadius)
+        else
+            newCircle.radius = math.floor(((circle1.radius * randomRadius) + (circle2.radius * (19 - randomRadius))) / 19) + 1
+        end
+        table.insert(newVectorImage.circles, newCircle)
     end
 
-    return newPalette
+    return newVectorImage
 end
 -- VectorImage end }}}
 VectorImageTest = {} -- class {{{
