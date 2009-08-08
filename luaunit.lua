@@ -73,6 +73,29 @@ function assertEquals(actual, expected)
 	end
 end
 
+function assertNotEquals(actual, expected)
+	-- assert that two values are equal and calls error else
+	if  actual == expected  then
+		local function wrapValue( v )
+			if type(v) == 'string' then return "'"..v.."'" end
+			return tostring(v)
+		end
+		if not USE_EXPECTED_ACTUAL_IN_ASSERT_EQUALS then
+			expected, actual = actual, expected
+		end
+
+		local errorMsg
+		if type(expected) == 'string' then
+			errorMsg = "\nexpected: "..wrapValue(expected).."\n"..
+                             "actual  : "..wrapValue(actual).."\n"
+		else
+			errorMsg = "expected: "..wrapValue(expected)..", actual: "..wrapValue(actual)
+		end
+		print (errorMsg)
+		error( errorMsg, 2 )
+	end
+end
+
 function assertBetween(actual, minimum, maximum)
 	local errorMsg
 	if actual < minimum then
@@ -111,6 +134,7 @@ assert_between = assertBetween
 assert_equals = assertEquals
 assert_error = assertError
 assert_greater_than = assertGreaterThan
+assert_not_equals = assertNotEquals
 assert_type = assertType
 
 function wrapFunctions(...)
