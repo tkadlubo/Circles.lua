@@ -1,6 +1,25 @@
 #!/usr/bin/env lua
 
+-- circles.lua, an experimental image encoder/decoder
+-- Copyright (C) 2009 Tadeusz Andrzej Kadlubowski
+--
+--This program is free software; you can redistribute it and/or
+--modify it under the terms of the GNU General Public License
+--as published by the Free Software Foundation; either version 2
+--of the License, or (at your option) any later version.
+--
+--This program is distributed in the hope that it will be useful,
+--but WITHOUT ANY WARRANTY; without even the implied warranty of
+--MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--GNU General Public License for more details.
+--
+--You should have received a copy of the GNU General Public License
+--along with this program; if not, write to the Free Software
+--Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 math.randomseed(os.time())
+
+mutation_param = 17
 
 Decoder = { -- class {{{
     className = "Decoder"
@@ -25,20 +44,26 @@ function Encoder:encode(image) --{{{
     local bestFitness = self.geneticManager:fitness(best)
     print("Best fit: "..bestFitness)
     local generation = 0
-    while true do
+    for i=1,2 do
         generation = generation + 1
         self.geneticManager:nextGeneration()
         local nextBest = self.geneticManager:getBestFit()
         local nextBestFitness = self.geneticManager:fitness(nextBest)
         print("Generation: "..generation.."\t Avg. fitness: "..self.geneticManager:averageFitness().."\t Best fitness: "..nextBestFitness)
         nextBest:rasterize():writePPMFile("gen"..generation..".ppm")
+
         if nextBestFitness > bestFitness then
             bestFitness = nextBestFitness
             best = nextBest
             
             print("Best fit in generation "..generation..": "..bestFitness)
             best:rasterize():writePPMFile("best"..generation..".ppm")
+            
+            local diffImage = best:rasterize() - self.geneticManager.targetImage
+            diffImage:writePPMFile("diff"..generation..".ppm")
         end
+
+        return best        
     end
 
 end --}}}
@@ -164,9 +189,6 @@ function GeneticManagerTest:testNextGeneration() --{{{
     for i,image in ipairs(self.testedGeneticManager.population) do
         assertType(image, "table")
         assertEquals(image.className, "VectorImage")
-        for _, oldImage in ipairs(oldPopulation) do
-            assertNotEquals(image, oldImage)
-        end
     end
 end --}}}
 -- GeneticManagerTest end }}}
@@ -218,20 +240,20 @@ function Palette.__concat(p1, p2) --{{{
         local randomB = math.random(20)
 
         local newColor = {}
-        if randomR >= 19 then
+        if randomR >= mutation_param then
             newColor.R = math.random()
         else
-            newColor.R = ((p1.colors[i].R * randomR) + (p2.colors[i].R * (19 - randomR))) / 19
+            newColor.R = ((p1.colors[i].R * randomR) + (p2.colors[i].R * (mutation_param - randomR))) / mutation_param
         end
-        if randomG >= 19 then
+        if randomG >= mutation_param then
             newColor.G = math.random()
         else
-            newColor.G = ((p1.colors[i].G * randomG) + (p2.colors[i].G * (19 - randomG))) / 19
+            newColor.G = ((p1.colors[i].G * randomG) + (p2.colors[i].G * (mutation_param - randomG))) / mutation_param
         end
-        if randomB >= 19 then
+        if randomB >= mutation_param then
             newColor.B = math.random()
         else
-            newColor.B = ((p1.colors[i].B * randomB) + (p2.colors[i].B * (19 - randomB))) / 19
+            newColor.B = ((p1.colors[i].B * randomB) + (p2.colors[i].B * (mutation_param - randomB))) / mutation_param
         end
 
         table.insert(newPalette.colors, newColor)
@@ -356,6 +378,11 @@ function PPMImage:pixelAt(x, y) --{{{
     return self.data[y][x]
 end --}}}
 
+function PPMImage:setSize(width, height) --{{{
+    self.width = width
+    self.height = height
+end --}}}
+
 function PPMImage:readPPMFile(fileName) --{{{
     local file = io.open(fileName, "r")
     assert(file ~= nil)
@@ -372,8 +399,7 @@ function PPMImage:readPPMFile(fileName) --{{{
         aspectRatio = function(self, line) --{{{
             local width, height = line:match("(%d+)%s+(%d+)")
             if width ~= nil and height ~=nil then
-                self.width = tonumber(width)
-                self.height = tonumber(height)
+                self:setSize(tonumber(width), tonumber(height))
             else
                 error("PPM syntax error in line "..self.line_counter..": invalid image size")
             end
@@ -454,6 +480,30 @@ function PPMImage:writePPMFile(fileName) --{{{
 
     file:close()
 end --}}}
+
+function PPMImage.__sub(image1, image2) --{{{
+    local newPPMImage = PPMImage:new()
+    
+    newPPMImage:setSize(image1.width, image1.height)
+
+    newPPMImage.depth = image1.depth
+    newPPMImage.data = {}
+    for y = 1,newPPMImage.height do
+        table.insert(newPPMImage.data, {})
+        for x = 1,newPPMImage.width do
+            local p1 = image1:pixelAt(x,y)
+            local p2 = image2:pixelAt(x,y)
+            local newPixel = {
+                R = 0.5 + (p1.R - p2.R) / 2,
+                G = 0.5 + (p1.G - p2.G) / 2,
+                B = 0.5 + (p1.B - p2.B) / 2
+            }
+            table.insert(newPPMImage.data[y], newPixel)
+        end
+    end
+
+    return newPPMImage
+end --}}}
 -- PPMImage end }}}
 PPMImageTest = {} -- class {{{
 function PPMImageTest:setUp()
@@ -483,6 +533,26 @@ function PPMImageTest:testWrite() --{{{
     self.testedImage:writePPMFile(tmpFile)
 end --}}}
 -- PPMImageTest end }}}
+
+
+Serializer = { --class
+}
+function Serializer:new(o) --{{{
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
+end --}}}
+
+function Serializer:serializeSize(width, height) --{{{
+end --}}}
+
+function Serializer:serializePalette(palette) --{{{
+end --}}}
+
+function Serializer:serializeCircle(circle) --{{{
+end --}}}
+-- Serializer end }}}
 
 
 VectorImage = { -- class {{{
@@ -531,8 +601,7 @@ function VectorImage:rasterize() --{{{
 end --}}}
 
 function VectorImage:writeTwit(outputFile) --{{{
-    local ppmImage = self:rasterize()
-    ppmImage:writePPMFile(outputFile)
+    local bitField = serialize
 end --}}}
 
 function VectorImage.__concat(v1, v2)
@@ -548,20 +617,20 @@ function VectorImage.__concat(v1, v2)
         local circle2 = v2.circles[i]
         local newCircle = {color = circle1.color}
 
-        if randomX >= 19 then
+        if randomX >= mutation_param then
             newCircle.x = math.random(v1.width)
         else
-            newCircle.x = math.floor(((circle1.x * randomX) + (circle2.x * (19 - randomX))) / 19) + 1
+            newCircle.x = math.floor(((circle1.x * randomX) + (circle2.x * (mutation_param - randomX))) / mutation_param) + 1
         end
-        if randomY >= 19 then
+        if randomY >= mutation_param then
             newCircle.y = math.random(v2.height)
         else
-            newCircle.y = math.floor(((circle1.y * randomY) + (circle2.y * (19 - randomY))) / 19)  + 1
+            newCircle.y = math.floor(((circle1.y * randomY) + (circle2.y * (mutation_param - randomY))) / mutation_param)  + 1
         end
-        if randomRadius >= 19 then
+        if randomRadius >= mutation_param then
             newCircle.radius = math.random(v1.maxRadius)
         else
-            newCircle.radius = math.floor(((circle1.radius * randomRadius) + (circle2.radius * (19 - randomRadius))) / 19) + 1
+            newCircle.radius = math.floor(((circle1.radius * randomRadius) + (circle2.radius * (mutation_param - randomRadius))) / mutation_param) + 1
         end
         table.insert(newVectorImage.circles, newCircle)
     end
@@ -599,6 +668,7 @@ function VectorImageTest:testCirclesHaveDimensions() --{{{
 end --}}}
 
 function VectorImageTest:testRasterize() --{{{
+    self.testedImage.defaultBackgroundColor = {R=0.0, G=0.0, B=0.0}
     self.testedImage:setSize(3, 4)
     self.testedImage:randomize()
     local ppmImage = self.testedImage:rasterize()
@@ -616,18 +686,18 @@ function main(operation, inputFile, outputFile) --{{{
         if inputFile == nil or outputFile == nil then
             error("Invalid command line parameters")
         end
-        encoder = Encoder:new()
-        inputImage = PPMImage:new({}, inputFile)
-        outputImage = encoder:encode(inputImage)
+        local encoder = Encoder:new()
+        local inputImage = PPMImage:new({}, inputFile)
+        local outputImage = encoder:encode(inputImage)
         outputImage:writeTwit(outputFile)
         return
     elseif operation == "decode" then
         if inputFile == nil or outputFile == nil then
             error("Invalid command line parameters")
         end
-        decoder = Decoder:new()
-        inputImage = decoder.readTwit(inputFile)
-        outputImage = PPMImage:new(inputImage)
+        local decoder = Decoder:new()
+        local inputImage = decoder.readTwit(inputFile)
+        local outputImage = PPMImage:new(inputImage)
         outputImage.write(outputFile)
         return
     elseif operation == "test" then
