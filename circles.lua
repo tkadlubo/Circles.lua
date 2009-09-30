@@ -1,7 +1,7 @@
 #!/usr/bin/env lua
 
 -- circles.lua, an experimental image encoder/decoder
--- Copyright (C) 2009 Tadeusz Andrzej Kadlubowski
+-- Copyright (C) 2009 Tadeusz Andrzej Kadlubowski yess@hell.org.pl
 --
 --This program is free software; you can redistribute it and/or
 --modify it under the terms of the GNU General Public License
@@ -27,6 +27,17 @@ Decoder = { -- class {{{
 -- Decoder end }}}
 
 
+Deserializer = { -- class {{{
+}
+
+function Deserializer:initSourceFile(fileName) --{{{
+end --}}}
+
+function Deserializer:deserializeNumber(bitWidth) --{{{
+end --}}}
+
+-- Deserializer end }}}
+ 
 Encoder = { -- class {{{
     className = "Encoder"
 }
@@ -535,7 +546,7 @@ end --}}}
 -- PPMImageTest end }}}
 
 
-Serializer = { --class
+Serializer = { --class --{{{
 }
 function Serializer:new(o) --{{{
     o = o or {}
@@ -551,6 +562,9 @@ function Serializer:serializePalette(palette) --{{{
 end --}}}
 
 function Serializer:serializeCircle(circle) --{{{
+end --}}}
+
+function Serializer:serializeNumber(x, bitWidth) --{{{
 end --}}}
 -- Serializer end }}}
 
