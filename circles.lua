@@ -546,13 +546,23 @@ end --}}}
 -- PPMImageTest end }}}
 
 
-Serializer = { --class --{{{
+Serializer = { --class {{{
+    minCodePoint = 0x4e00,
+    maxCodePoint = 0x8dff, --16384 CJK unified ideographs.
+    bitsPerCharacter = 14
 }
 function Serializer:new(o) --{{{
     o = o or {}
     setmetatable(o, self)
     self.__index = self
     return o
+end --}}}
+
+function Serializer:bitsToCodePoint(bitArray) --{{{
+end --}}}
+
+function Serializer:codePointToUTF8(codePoint) --{{{
+    
 end --}}}
 
 function Serializer:serializeSize(width, height) --{{{
@@ -567,7 +577,24 @@ end --}}}
 function Serializer:serializeNumber(x, bitWidth) --{{{
 end --}}}
 -- Serializer end }}}
+SerializerTest = {} -- class {{{
+function SerializerTest:setUp() --{{{
+    self.testedSerializer = Serializer:new()
+end --}}}
+function SerializerTest:testConstructor() --{{{
+assertType(self.testedSerializer, "table")
+assertType(self.testedSerializer.bitsPerCharacter, "number")
+assertGreaterThan(10, self.testedSerializer.bitsPerCharacter)
+end --}}}
 
+function SerializerTest:testCodepointToUTF8() --{{{
+error("notImplemented")
+end --}}}
+
+function SerializerTest:testBitsToCodePoint() --{{{
+error("notImplemented")
+end --}}}
+-- SerializerTest end }}}
 
 VectorImage = { -- class {{{
     className = "VectorImage",
@@ -716,7 +743,7 @@ function main(operation, inputFile, outputFile) --{{{
         return
     elseif operation == "test" then
         require("luaunit")
-        LuaUnit:run("GeneticManagerTest", "PaletteTest", "PPMImageTest", "VectorImageTest")
+        LuaUnit:run("GeneticManagerTest", "PaletteTest", "PPMImageTest", "SerializerTest", "VectorImageTest")
     else
         error("Unknown operation")
     end
